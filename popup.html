@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>FB Feed Customizer</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <h1>FB Feed Customizer</h1>
+
+  <div class="section">
+    <label class="row"><input type="checkbox" id="hideBirthdays" /> Hide Birthdays</label>
+    <label class="row"><input type="checkbox" id="hideContacts" /> Hide Contacts</label>
+    <label class="row"><input type="checkbox" id="hideShortcuts" /> Hide Your Shortcuts</label>
+    <label class="row"><input type="checkbox" id="hideStories" /> Hide Stories</label>
+    <label class="row"><input type="checkbox" id="hideReels" /> Hide Reels</label>
+    <label class="row"><input type="checkbox" id="hideVideos" /> Hide video posts</label>
+    <label class="row"><input type="checkbox" id="hideSponsored" /> Hide Sponsored posts</label>
+    <label class="row"><input type="checkbox" id="hidePeopleYouMayKnow" /> Hide People You May Know</label>
+    <label class="row"><input type="checkbox" id="hideUnfollowed" /> Hide posts from Pages/Groups you don't follow</label>
+  </div>
+
+  <div class="section">
+    <label for="tagName">Tag people</label>
+    <div class="tag-input-row">
+      <input type="text" id="tagName" placeholder="Name" />
+      <input type="text" id="tagValue" placeholder="Tag" />
+      <button type="button" id="addTag">Add</button>
+    </div>
+    <div id="tagChips" class="tag-chips"></div>
+  </div>
+
+  <div class="section">
+    <label for="hiddenPeople">Hide these people's posts — one name per line</label>
+    <textarea id="hiddenPeople" rows="3" placeholder="Some Person"></textarea>
+  </div>
+
+  <button id="save">Save</button>
+  <span id="status"></span>
+
+  <button type="button" id="openOptions" class="link-btn">Open full settings ↗</button>
+
+  <p class="note">Refresh any open Facebook tab after saving.</p>
+
+  <script src="settings.js"></script>
+</body>
+</html>

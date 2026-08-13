@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>FB Feed Customizer — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>FB Feed Customizer</h1>
+      <p class="subtitle">Choose what to hide from your Facebook feed, and tag or hide specific people.</p>
+    </header>
+
+    <section class="card">
+      <h2>Feed sections</h2>
+      <div class="checkbox-grid">
+        <label class="check-row"><input type="checkbox" id="hideBirthdays" /><span>Hide Birthdays</span></label>
+        <label class="check-row"><input type="checkbox" id="hideContacts" /><span>Hide Contacts</span></label>
+        <label class="check-row"><input type="checkbox" id="hideShortcuts" /><span>Hide Your Shortcuts</span></label>
+        <label class="check-row"><input type="checkbox" id="hideStories" /><span>Hide Stories</span></label>
+        <label class="check-row"><input type="checkbox" id="hideReels" /><span>Hide Reels</span></label>
+        <label class="check-row"><input type="checkbox" id="hideVideos" /><span>Hide video posts</span></label>
+        <label class="check-row"><input type="checkbox" id="hideSponsored" /><span>Hide Sponsored posts</span></label>
+        <label class="check-row"><input type="checkbox" id="hidePeopleYouMayKnow" /><span>Hide People You May Know</span></label>
+        <label class="check-row"><input type="checkbox" id="hideUnfollowed" /><span>Hide posts from Pages/Groups you don't follow</span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tag people</h2>
+      <p class="card-hint">A small badge appears next to their name in your feed.</p>
+      <div class="tag-input-row">
+        <input type="text" id="tagName" placeholder="Name" />
+        <input type="text" id="tagValue" placeholder="Tag" />
+        <button type="button" id="addTag">Add</button>
+      </div>
+      <div id="tagChips" class="tag-chips"></div>
+    </section>
+
+    <section class="card">
+      <h2>Hide people's posts</h2>
+      <p class="card-hint">One full name per line, matched exactly as it appears on Facebook.</p>
+      <textarea id="hiddenPeople" rows="5" placeholder="Some Person"></textarea>
+    </section>
+
+    <div class="save-bar">
+      <button id="save">Save changes</button>
+      <span id="status"></span>
+    </div>
+
+    <p class="note">Refresh any open Facebook tab after saving for changes to take effect.</p>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

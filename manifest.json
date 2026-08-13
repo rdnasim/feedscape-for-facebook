@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "FB Feed Customizer",
+  "version": "1.0.0",
+  "description": "Hide distracting Facebook UI sections (Birthdays, Contacts, Shortcuts, Stories, Reels, Videos, Sponsored) and tag or hide specific people in your feed.",
+  "permissions": ["storage"],
+  "host_permissions": ["*://*.facebook.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.facebook.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FB Feed Customizer"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

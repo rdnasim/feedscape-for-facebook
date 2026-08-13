@@ -1,0 +1,161 @@
+body {
+  width: 300px;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  padding: 12px 14px;
+  color: #1c1e21;
+}
+
+h1 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e4e6eb;
+}
+
+.section:last-of-type {
+  border-bottom: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+label[for] {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px;
+  border: 1px solid #ccd0d5;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+button {
+  width: 100%;
+  padding: 8px;
+  background: #1877f2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #166fe5;
+}
+
+.tag-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tag-input-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 6px;
+  border: 1px solid #ccd0d5;
+  border-radius: 4px;
+}
+
+.tag-input-row button {
+  width: auto;
+  flex-shrink: 0;
+  padding: 6px 12px;
+}
+
+.tag-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px 4px 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 12px;
+  background: #e7f3ff;
+  color: #1877f2;
+}
+
+.tag-chip .tag-chip-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.tag-chip .tag-chip-name {
+  font-weight: 600;
+}
+
+.tag-chip .tag-chip-remove {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: #1877f2;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.tag-chip .tag-chip-remove:hover {
+  background: rgba(24, 119, 242, 0.15);
+}
+
+.link-btn {
+  margin-top: 8px;
+  background: none;
+  color: #1877f2;
+  font-weight: 600;
+  padding: 4px;
+}
+
+.link-btn:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+#status {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: #42b72a;
+  margin-top: 6px;
+  height: 14px;
+}
+
+.note {
+  font-size: 11px;
+  color: #65676b;
+  margin: 10px 0 0;
+  text-align: center;
+}
