@@ -2,14 +2,20 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>FB Feed Customizer — Settings</title>
+  <title>Feedscape for Facebook — Settings</title>
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
   <div class="page">
     <header class="page-header">
-      <h1>FB Feed Customizer</h1>
-      <p class="subtitle">Choose what to hide from your Facebook feed, and tag or hide specific people.</p>
+      <div class="app-brand">
+        <img src="icons/icon48.png" alt="" class="app-logo" />
+        <div>
+          <h1>Feedscape for Facebook</h1>
+          <p class="subtitle">Choose what to hide from your Facebook feed, and tag or hide specific people.</p>
+        </div>
+      </div>
+      <button type="button" id="themeToggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
     </header>
 
     <section class="card">
@@ -23,8 +29,19 @@
         <label class="check-row"><input type="checkbox" id="hideVideos" /><span>Hide video posts</span></label>
         <label class="check-row"><input type="checkbox" id="hideSponsored" /><span>Hide Sponsored posts</span></label>
         <label class="check-row"><input type="checkbox" id="hidePeopleYouMayKnow" /><span>Hide People You May Know</span></label>
-        <label class="check-row"><input type="checkbox" id="hideUnfollowed" /><span>Hide posts from Pages/Groups you don't follow</span></label>
+        <label class="check-row"><input type="checkbox" id="hideUnfollowed" /><span>Hide unfollowed Pages/Groups</span></label>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>Predefined tags</h2>
+      <p class="card-hint">Define a tag once with a color, then pick it when tagging people below.</p>
+      <div class="tag-input-row">
+        <input type="text" id="predefinedTagText" placeholder="Tag name (e.g. Colleague)" />
+        <input type="color" id="predefinedTagColor" value="#1877f2" title="Tag color" />
+        <button type="button" id="addPredefinedTag">Add</button>
+      </div>
+      <div id="predefinedTagChips" class="tag-chips"></div>
     </section>
 
     <section class="card">
@@ -32,7 +49,9 @@
       <p class="card-hint">A small badge appears next to their name in your feed.</p>
       <div class="tag-input-row">
         <input type="text" id="tagName" placeholder="Name" />
-        <input type="text" id="tagValue" placeholder="Tag" />
+        <select id="tagValue">
+          <option value="" disabled selected>Select a tag…</option>
+        </select>
         <button type="button" id="addTag">Add</button>
       </div>
       <div id="tagChips" class="tag-chips"></div>

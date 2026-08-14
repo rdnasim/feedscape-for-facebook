@@ -12,8 +12,27 @@
     hidePeopleYouMayKnow: true,
     hideUnfollowed: true,
     tags: {},          // { "Full Name": "tag text" }
+    tagColors: {},     // { "tag text": "#rrggbb" } — one color per distinct
+                        // tag text, shared by everyone tagged with it.
     hiddenPeople: []   // ["Full Name", ...]
   };
+
+  const DEFAULT_TAG_COLOR = "#1877f2";
+
+  // A brief earlier version stored `tags[name]` as { text, color } (one
+  // color per person, not per tag). Extract just the text here regardless
+  // of which shape is present, so a color set that way still migrates
+  // cleanly into the shared tagColors registry the first time it's
+  // touched again (see setPersonTag).
+  function getPersonTagText(name) {
+    const raw = settings.tags[name];
+    if (!raw) return null;
+    return typeof raw === "string" ? raw : raw.text || null;
+  }
+
+  function getTagColor(tagText) {
+    return (settings.tagColors && settings.tagColors[tagText]) || DEFAULT_TAG_COLOR;
+  }
 
   let settings = { ...DEFAULTS };
 
@@ -78,13 +97,54 @@
     return false;
   }
 
+  // Hides "the whole post" starting from any element inside it. The naive
+  // closest('[role="article"]') doesn't work for every caller: that role
+  // only wraps a post's message/media/actions area, not its header row —
+  // confirmed live, the author-name link and a post's "Follow" button
+  // both sit outside any [role="article"] (see getAuthorNameLinks above).
+  // Tier 1 (fast path) handles elements already inside the article (e.g.
+  // a "Sponsored" label in the message body). Tier 2 walks up from a
+  // header-zone element looking for the smallest ancestor containing
+  // exactly one [role="article"] descendant. Some ad units have neither
+  // [role="article"] nor [role="feed"] anywhere in their ancestry at all
+  // (also confirmed live) — tier 3 falls back to the nearest
+  // [data-pagelet] ancestor, which FB scopes to one feed story/widget
+  // precisely (e.g. "FeedUnit_5"), same pattern already used elsewhere in
+  // this file for the left-nav Shortcuts widget. Each tier bails rather
+  // than guess broad, so this can't end up hiding multiple posts at once.
   function hideArticleAncestor(startEl, markerAttr) {
-    const article = startEl.closest('[role="article"]');
-    if (article && !article.hasAttribute(markerAttr)) {
-      article.classList.add("fbcustom-hidden");
-      article.setAttribute(markerAttr, "1");
+    let node = startEl.closest('[role="article"]');
+    if (node) {
+      if (!node.hasAttribute(markerAttr)) {
+        node.classList.add("fbcustom-hidden");
+        node.setAttribute(markerAttr, "1");
+      }
       return true;
     }
+
+    node = startEl.parentElement;
+    for (let i = 0; i < 20 && node; i++) {
+      const count = node.querySelectorAll('[role="article"]').length;
+      if (count === 1) {
+        if (!node.hasAttribute(markerAttr)) {
+          node.classList.add("fbcustom-hidden");
+          node.setAttribute(markerAttr, "1");
+        }
+        return true;
+      }
+      if (count > 1) break; // walked past the post — try data-pagelet instead
+      node = node.parentElement;
+    }
+
+    const pagelet = startEl.closest("[data-pagelet]");
+    if (pagelet) {
+      if (!pagelet.hasAttribute(markerAttr)) {
+        pagelet.classList.add("fbcustom-hidden");
+        pagelet.setAttribute(markerAttr, "1");
+      }
+      return true;
+    }
+
     return false;
   }
 
@@ -219,9 +279,16 @@
     }
   }
 
-  function getAuthorLinksInArticle(article) {
-    return article.querySelectorAll(
-      'h2 a[role="link"], h3 a[role="link"], h2 a, h3 a, strong a[role="link"]'
+  // Confirmed against a live page: the author-name link is NOT a descendant
+  // of the nearest [role="article"] — that role apparently only wraps the
+  // message/media/actions portion of a post, while the name/avatar header
+  // row sits as a sibling outside it. So this searches the whole document
+  // rather than being scoped per-article; callers that need "the post" for
+  // a given name link still get there via link.closest('[role="article"]'),
+  // which degrades safely to null (no-op) when that scoping doesn't apply.
+  function getAuthorNameLinks() {
+    return document.querySelectorAll(
+      'h2 a[role="link"], h3 a[role="link"], h4 a[role="link"], h2 a, h3 a, h4 a, strong a[role="link"]'
     );
   }
 
@@ -238,77 +305,258 @@
     return null;
   }
 
-  function setPersonTag(name, tagText) {
-    const updated = { ...settings.tags };
+  // Tag text is unique — one color per distinct tag, shared by everyone
+  // tagged with it. `color` is optional: pass it to set/overwrite that
+  // tag's color (affects every person who has this tag, not just `name`);
+  // omit it to leave the tag's existing color alone, defaulting a
+  // brand-new tag text to DEFAULT_TAG_COLOR.
+  function setPersonTag(name, tagText, color) {
+    const updatedTags = { ...settings.tags };
+    const updatedColors = { ...settings.tagColors };
     const trimmed = (tagText || "").trim();
     if (trimmed) {
-      updated[name] = trimmed;
+      updatedTags[name] = trimmed;
+      if (color) {
+        updatedColors[trimmed] = color;
+      } else if (!updatedColors[trimmed]) {
+        updatedColors[trimmed] = DEFAULT_TAG_COLOR;
+      }
     } else {
-      delete updated[name];
+      delete updatedTags[name];
+      // Not deleting the color entry even if this was the last person with
+      // that tag — harmless leftover, and keeps the color stable if the
+      // same tag text gets reused on someone else later.
     }
     // Round-trips through chrome.storage.onChanged (see top of file), which
     // updates `settings` and re-runs processPage() — same path the popup's
     // Save button uses, so badges/buttons everywhere stay in sync.
-    chrome.storage.local.set({ tags: updated });
+    chrome.storage.local.set({ tags: updatedTags, tagColors: updatedColors });
+  }
+
+  // Small on-page popover with a text input + color picker, replacing the
+  // native window.prompt() so tag color can be set right from the feed
+  // (a native prompt has no way to offer a color picker). Appended to
+  // document.body rather than nested near the trigger button, since FB's
+  // own containers can clip an absolutely-positioned child via
+  // overflow:hidden; a fixed-position element anchored via
+  // getBoundingClientRect avoids that.
+  let openTagEditorClose = null;
+
+  function closeTagEditor() {
+    if (openTagEditorClose) {
+      openTagEditorClose();
+      openTagEditorClose = null;
+    }
+  }
+
+  function openTagEditor(name, anchorEl) {
+    closeTagEditor(); // only one open at a time
+
+    const currentText = getPersonTagText(name);
+    const rect = anchorEl.getBoundingClientRect();
+
+    const editor = document.createElement("div");
+    editor.className = "fbcustom-tag-editor";
+    editor.style.top = `${rect.bottom + 6}px`;
+    editor.style.left = `${Math.max(8, rect.left)}px`;
+
+    const label = document.createElement("div");
+    label.className = "fbcustom-tag-editor-label";
+    label.textContent = `Tag for ${name}`;
+    editor.appendChild(label);
+
+    const row = document.createElement("div");
+    row.className = "fbcustom-tag-editor-row";
+
+    const listId = "fbcustom-tag-suggestions";
+    const textInput = document.createElement("input");
+    textInput.type = "text";
+    textInput.placeholder = "Tag";
+    textInput.setAttribute("list", listId);
+    textInput.value = currentText || "";
+    row.appendChild(textInput);
+
+    if (!document.getElementById(listId)) {
+      const datalist = document.createElement("datalist");
+      datalist.id = listId;
+      document.body.appendChild(datalist);
+    }
+    const datalist = document.getElementById(listId);
+    datalist.innerHTML = "";
+    Object.keys(settings.tagColors || {}).forEach((text) => {
+      const option = document.createElement("option");
+      option.value = text;
+      datalist.appendChild(option);
+    });
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = currentText ? getTagColor(currentText) : DEFAULT_TAG_COLOR;
+    row.appendChild(colorInput);
+
+    // Tag text is unique — typing an existing tag's name should show its
+    // real shared color, not whatever the picker happened to be showing.
+    textInput.addEventListener("input", () => {
+      const match = settings.tagColors && settings.tagColors[textInput.value.trim()];
+      if (match) colorInput.value = match;
+    });
+
+    editor.appendChild(row);
+
+    const actions = document.createElement("div");
+    actions.className = "fbcustom-tag-editor-actions";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", () => {
+      setPersonTag(name, textInput.value, colorInput.value);
+      closeTagEditor();
+    });
+    actions.appendChild(saveBtn);
+
+    if (currentText) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "fbcustom-tag-editor-remove";
+      removeBtn.textContent = "Remove";
+      removeBtn.addEventListener("click", () => {
+        setPersonTag(name, "");
+        closeTagEditor();
+      });
+      actions.appendChild(removeBtn);
+    }
+
+    editor.appendChild(actions);
+    document.body.appendChild(editor);
+    textInput.focus();
+    textInput.select();
+
+    textInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveBtn.click();
+      if (e.key === "Escape") closeTagEditor();
+    });
+
+    // Close on outside click, but not on the click that opened it (the
+    // listener is added on a microtask delay for that reason).
+    const onOutsideClick = (e) => {
+      if (!editor.contains(e.target)) closeTagEditor();
+    };
+    setTimeout(() => document.addEventListener("mousedown", onOutsideClick), 0);
+
+    openTagEditorClose = () => {
+      document.removeEventListener("mousedown", onOutsideClick);
+      editor.remove();
+    };
   }
 
   function applyPersonFeatures() {
     const hasHidden = settings.hiddenPeople.length > 0;
 
-    const articles = document.querySelectorAll('[role="article"]');
-    for (const article of articles) {
-      const links = getAuthorLinksInArticle(article);
-      for (const link of links) {
-        const name = (link.textContent || "").trim();
-        if (!name) continue;
+    const links = getAuthorNameLinks();
+    for (const link of links) {
+      const name = (link.textContent || "").trim();
+      if (!name) continue;
 
-        if (hasHidden && settings.hiddenPeople.includes(name)) {
-          article.classList.add("fbcustom-hidden");
-          article.setAttribute("data-fbcustom-person", "1");
-        }
-
-        // Keep the badge text in sync with the current tag (rather than
-        // only ever creating it once) so editing a tag — via the popup or
-        // the feed button below — doesn't leave stale text behind.
-        const tagText = settings.tags[name];
-        let badge = findSiblingByClass(link, "fbcustom-tag", 2);
-        if (tagText) {
-          if (!badge) {
-            badge = document.createElement("span");
-            badge.className = "fbcustom-tag";
-            link.insertAdjacentElement("afterend", badge);
-          }
-          if (badge.textContent !== tagText) badge.textContent = tagText;
-        } else if (badge) {
-          badge.remove();
-          badge = null;
-        }
-
-        // "+"/"✎" button to add or edit this person's tag right from the
-        // feed, instead of opening the popup and typing the name by hand.
-        let btn = findSiblingByClass(link, "fbcustom-tag-btn", 2);
-        if (!btn) {
-          btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "fbcustom-tag-btn";
-          btn.addEventListener("click", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const next = window.prompt(`Tag for ${name}:`, settings.tags[name] || "");
-            if (next === null) return; // cancelled
-            setPersonTag(name, next);
-          });
-        }
-        const afterEl = badge || link;
-        if (btn.previousElementSibling !== afterEl) {
-          // insertAdjacentElement moves an already-attached element rather
-          // than cloning it, so the click listener above survives this.
-          afterEl.insertAdjacentElement("afterend", btn);
-        }
-        btn.textContent = tagText ? "✎" : "+";
-        btn.title = tagText ? `Edit tag for ${name}` : `Add tag for ${name}`;
+      if (hasHidden && settings.hiddenPeople.includes(name)) {
+        hideArticleAncestor(link, "data-fbcustom-person");
       }
+
+      // Highlight the whole title area (not just the small badge) when
+      // this person is tagged, so a tagged post stands out while scanning
+      // the feed instead of needing to spot the badge text. Anchored on
+      // the profile_name wrapper, same semantic-attribute anchoring this
+      // file already uses elsewhere — falls back to the nearest heading if
+      // that wrapper isn't present on some post variant.
+      const titleArea = link.closest('[data-ad-rendering-role="profile_name"]') || link.closest("h2, h3, h4");
+
+      // Keep the badge text/color in sync with the current tag (rather
+      // than only ever creating it once) so editing a tag — via the popup
+      // or the feed button below — doesn't leave stale text/color behind.
+      // Color comes from the shared tagColors registry (same tag text =
+      // same color everywhere), not from this person's entry directly.
+      const tagText = getPersonTagText(name);
+      const tagColor = tagText ? getTagColor(tagText) : null;
+      if (titleArea) {
+        titleArea.classList.toggle("fbcustom-tag-highlight", !!tagText);
+        if (tagText) titleArea.style.setProperty("--tag-color", tagColor);
+        else titleArea.style.removeProperty("--tag-color");
+      }
+      let badge = findSiblingByClass(link, "fbcustom-tag", 2);
+      if (tagText) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "fbcustom-tag";
+          link.insertAdjacentElement("afterend", badge);
+        }
+        if (badge.textContent !== tagText) badge.textContent = tagText;
+        badge.style.setProperty("--tag-color", tagColor);
+      } else if (badge) {
+        badge.remove();
+        badge = null;
+      }
+
+      // "+"/"✎" button to add or edit this person's tag right from the
+      // feed, instead of opening the popup and typing the name by hand.
+      let btn = findSiblingByClass(link, "fbcustom-tag-btn", 2);
+      if (!btn) {
+        btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "fbcustom-tag-btn";
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openTagEditor(name, btn);
+        });
+      }
+      const afterEl = badge || link;
+      if (btn.previousElementSibling !== afterEl) {
+        // insertAdjacentElement moves an already-attached element rather
+        // than cloning it, so the click listener above survives this.
+        afterEl.insertAdjacentElement("afterend", btn);
+      }
+      btn.textContent = tagText ? "✎" : "+";
+      btn.title = tagText ? `Edit tag for ${name}` : `Add tag for ${name}`;
     }
+  }
+
+  // Adds the same "+"/"✎" tag button next to a profile's own name at the
+  // top of their profile page. That name has no stable selector of its
+  // own — it's a plain `[role="button"]` div, a pattern used all over FB —
+  // so anchor off the "X followers" link next to it instead, which is
+  // unique and semantic. Bounded walk-up; no-ops safely if not found
+  // rather than risk grabbing the wrong element.
+  function addProfileHeaderTagButton() {
+    const followersLink = document.querySelector('a[href*="/followers/"]');
+    if (!followersLink) return;
+
+    let scope = followersLink;
+    let nameBtn = null;
+    for (let i = 0; i < 6 && scope && !nameBtn; i++) {
+      scope = scope.parentElement;
+      if (!scope) break;
+      nameBtn = scope.querySelector('div[role="button"][tabindex="0"]');
+    }
+    if (!nameBtn) return;
+
+    const name = (nameBtn.textContent || "").trim();
+    if (!name) return;
+
+    let btn = findSiblingByClass(nameBtn, "fbcustom-profile-tag-btn", 1);
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fbcustom-tag-btn fbcustom-profile-tag-btn";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openTagEditor(name, btn);
+      });
+      nameBtn.insertAdjacentElement("afterend", btn);
+    }
+    const tagText = getPersonTagText(name);
+    btn.textContent = tagText ? "✎" : "+";
+    btn.title = tagText ? `Edit tag for ${name}` : `Add tag for ${name}`;
   }
 
   function processPage() {
@@ -322,6 +570,7 @@
     if (settings.hideUnfollowed) hideUnfollowedPosts();
     if (settings.hideVideos) hideVideoPosts();
     applyPersonFeatures();
+    addProfileHeaderTagButton();
   }
 
   // Facebook is a heavily dynamic SPA, so we re-run on every DOM mutation,

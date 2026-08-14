@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "FB Feed Customizer",
+  "name": "Feedscape for Facebook",
   "version": "1.0.0",
   "description": "Hide distracting Facebook UI sections (Birthdays, Contacts, Shortcuts, Stories, Reels, Videos, Sponsored) and tag or hide specific people in your feed.",
   "permissions": ["storage"],
   "host_permissions": ["*://*.facebook.com/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
       "matches": ["*://*.facebook.com/*"],
@@ -15,7 +21,13 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "FB Feed Customizer"
+    "default_title": "Feedscape for Facebook",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "options_ui": {
     "page": "options.html",

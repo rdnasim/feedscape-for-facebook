@@ -2,41 +2,62 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>FB Feed Customizer</title>
+  <title>Feedscape for Facebook</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <h1>FB Feed Customizer</h1>
+  <header class="app-header">
+    <div class="app-brand">
+      <img src="icons/icon32.png" alt="" class="app-logo" />
+      <span class="app-title">Feedscape</span>
+    </div>
+    <button type="button" id="themeToggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+  </header>
 
-  <div class="section">
-    <label class="row"><input type="checkbox" id="hideBirthdays" /> Hide Birthdays</label>
-    <label class="row"><input type="checkbox" id="hideContacts" /> Hide Contacts</label>
-    <label class="row"><input type="checkbox" id="hideShortcuts" /> Hide Your Shortcuts</label>
-    <label class="row"><input type="checkbox" id="hideStories" /> Hide Stories</label>
-    <label class="row"><input type="checkbox" id="hideReels" /> Hide Reels</label>
-    <label class="row"><input type="checkbox" id="hideVideos" /> Hide video posts</label>
-    <label class="row"><input type="checkbox" id="hideSponsored" /> Hide Sponsored posts</label>
-    <label class="row"><input type="checkbox" id="hidePeopleYouMayKnow" /> Hide People You May Know</label>
-    <label class="row"><input type="checkbox" id="hideUnfollowed" /> Hide posts from Pages/Groups you don't follow</label>
-  </div>
+  <section class="card">
+    <h2>Feed sections</h2>
+    <label class="check-row"><input type="checkbox" id="hideBirthdays" /><span>Hide Birthdays</span></label>
+    <label class="check-row"><input type="checkbox" id="hideContacts" /><span>Hide Contacts</span></label>
+    <label class="check-row"><input type="checkbox" id="hideShortcuts" /><span>Hide Your Shortcuts</span></label>
+    <label class="check-row"><input type="checkbox" id="hideStories" /><span>Hide Stories</span></label>
+    <label class="check-row"><input type="checkbox" id="hideReels" /><span>Hide Reels</span></label>
+    <label class="check-row"><input type="checkbox" id="hideVideos" /><span>Hide video posts</span></label>
+    <label class="check-row"><input type="checkbox" id="hideSponsored" /><span>Hide Sponsored posts</span></label>
+    <label class="check-row"><input type="checkbox" id="hidePeopleYouMayKnow" /><span>Hide People You May Know</span></label>
+    <label class="check-row"><input type="checkbox" id="hideUnfollowed" /><span>Hide unfollowed Pages/Groups</span></label>
+  </section>
 
-  <div class="section">
-    <label for="tagName">Tag people</label>
+  <section class="card">
+    <h2>Predefined tags</h2>
+    <div class="tag-input-row">
+      <input type="text" id="predefinedTagText" placeholder="Tag name (e.g. Colleague)" />
+      <input type="color" id="predefinedTagColor" value="#1877f2" title="Tag color" />
+      <button type="button" id="addPredefinedTag">Add</button>
+    </div>
+    <div id="predefinedTagChips" class="tag-chips"></div>
+  </section>
+
+  <section class="card">
+    <h2>Tag people</h2>
     <div class="tag-input-row">
       <input type="text" id="tagName" placeholder="Name" />
-      <input type="text" id="tagValue" placeholder="Tag" />
+      <select id="tagValue">
+        <option value="" disabled selected>Select a tag…</option>
+      </select>
       <button type="button" id="addTag">Add</button>
     </div>
     <div id="tagChips" class="tag-chips"></div>
-  </div>
+  </section>
 
-  <div class="section">
-    <label for="hiddenPeople">Hide these people's posts — one name per line</label>
-    <textarea id="hiddenPeople" rows="3" placeholder="Some Person"></textarea>
-  </div>
+  <section class="card">
+    <h2>Hide people's posts</h2>
+    <textarea id="hiddenPeople" rows="3" placeholder="Some Person, one per line"></textarea>
+  </section>
 
-  <button id="save">Save</button>
-  <span id="status"></span>
+  <div class="save-bar">
+    <button id="save">Save</button>
+    <span id="status"></span>
+  </div>
 
   <button type="button" id="openOptions" class="link-btn">Open full settings ↗</button>
 

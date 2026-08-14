@@ -1,12 +1,29 @@
 :root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --surface-alt: #f0f2f5;
+  --border: #e4e6eb;
+  --text: #1c1e21;
+  --text-muted: #65676b;
   --accent: #1877f2;
   --accent-hover: #166fe5;
   --accent-soft: #e7f3ff;
-  --text: #1c1e21;
-  --text-muted: #65676b;
-  --border: #e4e6eb;
-  --page-bg: #f0f2f5;
-  --card-bg: #ffffff;
+  --success: #42b72a;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 6px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="dark"] {
+  --bg: #18191a;
+  --surface: #242526;
+  --surface-alt: #3a3b3c;
+  --border: #3e4042;
+  --text: #e4e6eb;
+  --text-muted: #b0b3b8;
+  --accent: #4599ff;
+  --accent-hover: #6bb0ff;
+  --accent-soft: rgba(69, 153, 255, 0.16);
+  --success: #5fd44a;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 6px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -15,9 +32,18 @@
 
 body {
   margin: 0;
-  background: var(--page-bg);
+  background: var(--bg);
   font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   color: var(--text);
+}
+
+body,
+.card,
+input,
+select,
+textarea,
+button {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .page {
@@ -27,7 +53,25 @@ body {
 }
 
 .page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 28px;
+}
+
+.app-brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.app-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .page-header h1 {
@@ -42,10 +86,27 @@ body {
   color: var(--text-muted);
 }
 
+.theme-toggle {
+  width: auto;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-alt);
+}
+
 .card {
-  background: var(--card-bg);
+  background: var(--surface);
   border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 6px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-sm);
   padding: 24px;
   margin-bottom: 20px;
 }
@@ -79,7 +140,7 @@ body {
 }
 
 .check-row:hover {
-  background: var(--page-bg);
+  background: var(--surface-alt);
 }
 
 .check-row input {
@@ -94,18 +155,33 @@ body {
   gap: 8px;
 }
 
-.tag-input-row input {
+.tag-input-row input[type="text"],
+.tag-input-row select {
   flex: 1;
   min-width: 0;
   font-size: 14px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
 }
 
-.tag-input-row input:focus {
+.tag-input-row input[type="text"]:focus,
+.tag-input-row select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.tag-input-row input[type="color"] {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--surface);
 }
 
 .tag-input-row button {
@@ -124,14 +200,49 @@ body {
 .tag-chip {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: 6px;
   max-width: 100%;
-  padding: 6px 6px 6px 12px;
+  padding: 6px 6px 6px 10px;
   font-size: 13px;
   line-height: 1.4;
   border-radius: 14px;
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.tag-chip-color {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  padding: 0;
+  border: 1px solid rgba(24, 119, 242, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+}
+
+.tag-chip-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+/* Read-only color dot on a "Tag people" chip — color itself is only
+   editable from the Predefined tags section above, since it belongs to
+   the tag text, not to this one person's assignment. */
+.tag-chip-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 3px;
+  border-radius: 50%;
+}
+
+.tag-chip-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
 }
 
 .tag-chip .tag-chip-text {
@@ -168,6 +279,8 @@ textarea {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
   resize: vertical;
 }
 
@@ -179,7 +292,7 @@ textarea:focus {
 button {
   padding: 10px 16px;
   background: var(--accent);
-  color: white;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -205,7 +318,7 @@ button:hover {
 #status {
   font-size: 14px;
   font-weight: 600;
-  color: #42b72a;
+  color: var(--success);
 }
 
 .note {
@@ -217,5 +330,9 @@ button:hover {
 @media (max-width: 560px) {
   .checkbox-grid {
     grid-template-columns: 1fr;
+  }
+
+  .page-header {
+    flex-direction: column;
   }
 }
