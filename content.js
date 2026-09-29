@@ -46,36 +46,113 @@
     peopleYouMayKnow: ["People You May Know", "People you may know"]
   };
 
+  // Every string findExactTextElements can be asked for, so a single
+  // document scan per pass can bucket all of them at once. Keep in sync
+  // with the matcher lists above and the literal lists passed at the call
+  // sites — a string missing from here just never matches.
+  const ALL_MATCH_TEXTS = [
+    ...HEADING_MATCHERS.birthdays,
+    ...HEADING_MATCHERS.contacts,
+    ...HEADING_MATCHERS.shortcuts,
+    ...HEADING_MATCHERS.peopleYouMayKnow,
+    "Follow",
+    "Sponsored"
+  ];
+
+  // A content script keeps running after its extension is reloaded or
+  // updated, but its chrome.* bridge is dead: every storage call then
+  // throws "Extension context invalidated" — once a second forever, from
+  // the safety-net poll at the bottom of this file. Detect the orphaned
+  // state and tear ourselves down instead of spewing errors into the
+  // page's console.
+  function isExtensionAlive() {
+    try {
+      return !!(chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Storage can hand back a key with the wrong shape, or none at all (it
+  // was removed, or the whole area was cleared — onChanged reports that as
+  // newValue: undefined). Fill those back in rather than letting e.g.
+  // `settings.hiddenPeople.length` throw out of processPage, which would
+  // silently stop every feature until the tab is reloaded.
+  function normalizeSettings(raw) {
+    const next = { ...DEFAULTS, ...raw };
+    for (const key in DEFAULTS) {
+      if (next[key] !== undefined) continue;
+      const fallback = DEFAULTS[key];
+      // Fresh copies, so the DEFAULTS objects never become shared state.
+      next[key] = Array.isArray(fallback)
+        ? []
+        : fallback && typeof fallback === "object"
+        ? {}
+        : fallback;
+    }
+    if (!next.tags || typeof next.tags !== "object") next.tags = {};
+    if (!next.tagColors || typeof next.tagColors !== "object") next.tagColors = {};
+    if (!Array.isArray(next.hiddenPeople)) next.hiddenPeople = [];
+    return next;
+  }
+
   function loadSettings(cb) {
     chrome.storage.local.get(DEFAULTS, (stored) => {
-      settings = { ...DEFAULTS, ...stored };
+      if (chrome.runtime.lastError) return; // extension went away mid-flight
+      settings = normalizeSettings(stored);
       cb && cb();
     });
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
+    // `theme` lives in the same area but only affects the settings UI —
+    // reprocessing the whole page on every dark-mode toggle is pure waste.
+    let relevant = false;
+    const merged = { ...settings };
     for (const key in changes) {
-      settings[key] = changes[key].newValue;
+      if (!(key in DEFAULTS)) continue;
+      merged[key] = changes[key].newValue;
+      relevant = true;
     }
+    if (!relevant) return;
+    settings = normalizeSettings(merged);
     processPage();
   });
 
-  function textMatches(el, list) {
-    const t = (el.textContent || "").trim();
-    return list.includes(t);
+  // One document scan per processPage pass, bucketed by exact text and
+  // shared by every matcher below. This used to be a full
+  // querySelectorAll("span, h2, h3, a, div") walk *per matcher* — six of
+  // them per pass, over a feed that can hold tens of thousands of nodes,
+  // every second. Same matching, one sixth of the traversal.
+  //
+  // The index must never outlive the pass that built it: FB's DOM moves
+  // constantly, and a stale bucket would hand out detached nodes.
+  let textIndex = null;
+
+  function buildTextIndex() {
+    const index = new Map();
+    for (const text of ALL_MATCH_TEXTS) index.set(text, []);
+    const all = document.querySelectorAll("span, h2, h3, a, div");
+    for (const el of all) {
+      // Leaf-only (see findExactTextElements).
+      if (el.children.length !== 0) continue;
+      const bucket = index.get((el.textContent || "").trim());
+      if (bucket) bucket.push(el);
+    }
+    return index;
   }
 
   // Find leaf elements (no element children) whose exact text matches one
   // of `list`. Leaf-only avoids matching a giant wrapper div that happens
-  // to contain the word somewhere inside it.
+  // to contain the word somewhere inside it. Every string in `list` must
+  // also appear in ALL_MATCH_TEXTS, or the index holds no bucket for it.
   function findExactTextElements(list) {
+    if (!textIndex) textIndex = buildTextIndex();
     const results = [];
-    const all = document.querySelectorAll("span, h2, h3, a, div");
-    for (const el of all) {
-      if (el.children.length === 0 && textMatches(el, list)) {
-        results.push(el);
-      }
+    for (const text of list) {
+      const bucket = textIndex.get(text);
+      if (bucket) results.push(...bucket);
     }
     return results;
   }
@@ -305,6 +382,23 @@
     return null;
   }
 
+  // Writing the tag button's label unconditionally on every pass was
+  // quietly spinning the extension: assigning `textContent` replaces the
+  // text node even when the value is identical, the MutationObserver at
+  // the bottom of this file watches childList across the whole document,
+  // and the record that produced queued another pass ~150ms later — which
+  // rewrote the label again, forever, on a completely idle page.
+  //
+  // So anything processPage writes into the DOM has to be a no-op when the
+  // value hasn't changed, or it feeds itself. The tag badge in
+  // applyPersonFeatures already guarded its textContent that way; the
+  // button didn't.
+  function setIfChanged(btn, icon, label) {
+    if (btn.textContent !== icon) btn.textContent = icon;
+    if (btn.title !== label) btn.title = label;
+    if (btn.getAttribute("aria-label") !== label) btn.setAttribute("aria-label", label);
+  }
+
   // Tag text is unique — one color per distinct tag, shared by everyone
   // tagged with it. `color` is optional: pass it to set/overwrite that
   // tag's color (affects every person who has this tag, not just `name`);
@@ -330,7 +424,13 @@
     // Round-trips through chrome.storage.onChanged (see top of file), which
     // updates `settings` and re-runs processPage() — same path the popup's
     // Save button uses, so badges/buttons everywhere stay in sync.
-    chrome.storage.local.set({ tags: updatedTags, tagColors: updatedColors });
+    if (!isExtensionAlive()) return;
+    try {
+      chrome.storage.local.set({ tags: updatedTags, tagColors: updatedColors });
+    } catch (e) {
+      // Context died between the check above and the call — nothing to do
+      // but drop the edit; the page is about to be reloaded anyway.
+    }
   }
 
   // Small on-page popover with a text input + color picker, replacing the
@@ -357,6 +457,8 @@
 
     const editor = document.createElement("div");
     editor.className = "fbcustom-tag-editor";
+    editor.setAttribute("role", "dialog");
+    editor.setAttribute("aria-label", `Tag for ${name}`);
     editor.style.top = `${rect.bottom + 6}px`;
     editor.style.left = `${Math.max(8, rect.left)}px`;
 
@@ -372,6 +474,7 @@
     const textInput = document.createElement("input");
     textInput.type = "text";
     textInput.placeholder = "Tag";
+    textInput.setAttribute("aria-label", "Tag text");
     textInput.setAttribute("list", listId);
     textInput.value = currentText || "";
     row.appendChild(textInput);
@@ -391,6 +494,8 @@
 
     const colorInput = document.createElement("input");
     colorInput.type = "color";
+    colorInput.setAttribute("aria-label", "Tag color");
+    colorInput.title = "Tag color";
     colorInput.value = currentText ? getTagColor(currentText) : DEFAULT_TAG_COLOR;
     row.appendChild(colorInput);
 
@@ -515,8 +620,11 @@
         // than cloning it, so the click listener above survives this.
         afterEl.insertAdjacentElement("afterend", btn);
       }
-      btn.textContent = tagText ? "✎" : "+";
-      btn.title = tagText ? `Edit tag for ${name}` : `Add tag for ${name}`;
+      // The visible label is a bare "+"/"✎" glyph, which a screen reader
+      // announces as nothing useful — `title` alone isn't a reliable
+      // accessible name, so set one explicitly.
+      const btnLabel = tagText ? `Edit tag for ${name}` : `Add tag for ${name}`;
+      setIfChanged(btn, tagText ? "✎" : "+", btnLabel);
     }
   }
 
@@ -555,29 +663,114 @@
       nameBtn.insertAdjacentElement("afterend", btn);
     }
     const tagText = getPersonTagText(name);
-    btn.textContent = tagText ? "✎" : "+";
-    btn.title = tagText ? `Edit tag for ${name}` : `Add tag for ${name}`;
+    setIfChanged(btn, tagText ? "✎" : "+", tagText ? `Edit tag for ${name}` : `Add tag for ${name}`);
+  }
+
+  // Every marker attribute a given setting stamps onto the DOM, so turning
+  // that setting off can put back exactly what it hid — and nothing else.
+  const FEATURE_MARKERS = {
+    hideBirthdays: ["data-fbcustom-birthdays"],
+    hideContacts: ["data-fbcustom-contacts"],
+    hideShortcuts: ["data-fbcustom-shortcuts"],
+    hideStories: ["data-fbcustom-stories", "data-fbcustom-storiesCard"],
+    hideReels: ["data-fbcustom-reels", "data-fbcustom-reelsCard"],
+    hideSponsored: ["data-fbcustom-sponsored"],
+    hidePeopleYouMayKnow: [
+      "data-fbcustom-peopleYouMayKnow",
+      "data-fbcustom-peopleYouMayKnowCard"
+    ],
+    hideUnfollowed: ["data-fbcustom-unfollowed"],
+    hideVideos: ["data-fbcustom-video"]
+  };
+
+  function unhideByMarker(markerAttr) {
+    // Attribute names are ASCII case-insensitive in HTML documents, so the
+    // camelCase markers above still match what setAttribute stored.
+    for (const el of document.querySelectorAll(`[${markerAttr}]`)) {
+      el.classList.remove("fbcustom-hidden");
+      el.removeAttribute(markerAttr);
+    }
+  }
+
+  // Hiding used to be one-way: once an element was marked, nothing ever
+  // took the class back off, so unticking a box did nothing until the tab
+  // was reloaded (hence the old "refresh any open Facebook tab" note in
+  // the settings UI). Restore only what was *just* turned off — sweeping
+  // unconditionally on every pass would un-hide and re-hide a second
+  // later, which flickers visibly while scrolling.
+  let appliedState = null;
+
+  function restoreDisabledFeatures() {
+    const previous = appliedState;
+    const current = {};
+    for (const key in FEATURE_MARKERS) {
+      current[key] = !!settings[key];
+      if (previous && previous[key] === current[key]) continue;
+      if (!current[key]) FEATURE_MARKERS[key].forEach(unhideByMarker);
+    }
+    // hiddenPeople isn't a flag — any edit to the list can un-hide
+    // someone, so compare the list itself and let the person pass below
+    // re-hide whoever is still on it, in this same pass (no flicker).
+    current.hiddenPeople = settings.hiddenPeople.join("\n");
+    if (previous && previous.hiddenPeople !== current.hiddenPeople) {
+      unhideByMarker("data-fbcustom-person");
+    }
+    appliedState = current;
   }
 
   function processPage() {
-    if (settings.hideBirthdays) hideRightColumnWidget(HEADING_MATCHERS.birthdays, "birthdays");
-    if (settings.hideContacts) hideRightColumnWidget(HEADING_MATCHERS.contacts, "contacts");
-    if (settings.hideShortcuts) hideLeftShortcuts();
-    if (settings.hideStories) hideStoriesTray();
-    if (settings.hideReels) hideReelsShelf();
-    if (settings.hideSponsored) hideSponsoredPosts();
-    if (settings.hidePeopleYouMayKnow) hidePeopleYouMayKnow();
-    if (settings.hideUnfollowed) hideUnfollowedPosts();
-    if (settings.hideVideos) hideVideoPosts();
-    applyPersonFeatures();
-    addProfileHeaderTagButton();
+    restoreDisabledFeatures();
+    try {
+      if (settings.hideBirthdays) hideRightColumnWidget(HEADING_MATCHERS.birthdays, "birthdays");
+      if (settings.hideContacts) hideRightColumnWidget(HEADING_MATCHERS.contacts, "contacts");
+      if (settings.hideShortcuts) hideLeftShortcuts();
+      if (settings.hideStories) hideStoriesTray();
+      if (settings.hideReels) hideReelsShelf();
+      if (settings.hideSponsored) hideSponsoredPosts();
+      if (settings.hidePeopleYouMayKnow) hidePeopleYouMayKnow();
+      if (settings.hideUnfollowed) hideUnfollowedPosts();
+      if (settings.hideVideos) hideVideoPosts();
+      applyPersonFeatures();
+      addProfileHeaderTagButton();
+    } finally {
+      // Drop the per-pass scan even if a matcher threw, so the next pass
+      // can't inherit stale/detached nodes from this one.
+      textIndex = null;
+    }
   }
 
   // Facebook is a heavily dynamic SPA, so we re-run on every DOM mutation,
   // but throttled/idle so we don't hammer the page while scrolling.
   let scheduled = false;
+  let observer = null;
+  let pollTimer = null;
+
+  // Stop observing and polling for good. Called when the extension context
+  // dies under us (reload/update/uninstall): the DOM we already hid stays
+  // as-is, which is the right outcome — the replacement content script in
+  // the next page load takes over from there.
+  function teardown() {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
   function scheduleProcess() {
     if (scheduled) return;
+    if (!isExtensionAlive()) {
+      teardown();
+      return;
+    }
+    // A background tab has nothing to show; skip the scan entirely and
+    // catch up on the visibilitychange handler below. (Chrome throttles
+    // the poll in background tabs but still delivers mutation records,
+    // and FB keeps mutating a backgrounded feed.)
+    if (document.hidden) return;
     scheduled = true;
     const run = () => {
       scheduled = false;
@@ -590,9 +783,13 @@
     }
   }
 
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) scheduleProcess();
+  });
+
   loadSettings(() => {
     processPage();
-    const observer = new MutationObserver(scheduleProcess);
+    observer = new MutationObserver(scheduleProcess);
     // Script now runs at document_start (see manifest.json) so hiding kicks
     // in before FB renders the widgets, instead of flashing them visible
     // until document_idle. document.body doesn't exist yet at this point,
@@ -620,6 +817,6 @@
     // processPage far too often). A once-a-second poll is a cheap
     // self-healing backstop either way, instead of staying wrong until an
     // unrelated mutation happens to trigger the next recheck.
-    setInterval(scheduleProcess, 1000);
+    pollTimer = setInterval(scheduleProcess, 1000);
   });
 })();
