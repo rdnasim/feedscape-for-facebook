@@ -48,7 +48,7 @@ Click the toolbar icon to open a compact settings panel:
 - **Save** — nothing takes effect until you click this.
 - **Open full settings ↗** — opens the same controls in a full browser tab, more comfortable for managing a longer list of tags/names.
 
-After saving, **refresh any open Facebook tab** — most changes apply live via a listener, but a refresh guarantees everything re-applies cleanly.
+Saved changes apply to any open Facebook tab immediately — including *unticking* a box, which puts the hidden section straight back without a refresh.
 
 ### Tagging directly from the feed
 

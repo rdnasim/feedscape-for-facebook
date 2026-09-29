@@ -144,3 +144,52 @@
 .fbcustom-tag-editor-actions button.fbcustom-tag-editor-remove:hover {
   background: #d8dade;
 }
+
+/* The popover is our own element on top of Facebook's page, so it keeps
+   its light card styling even when FB is rendering dark — glaringly so.
+   Facebook's dark mode is an account setting we can't read from a content
+   script, but its default is "System", so prefers-color-scheme matches it
+   for most people; someone who has forced FB light/dark against their OS
+   will see the popover follow the OS instead. Only the popover and the
+   tag button are themed here — .fbcustom-tag badges are already painted
+   from the user's own chosen --tag-color. */
+@media (prefers-color-scheme: dark) {
+  .fbcustom-tag-editor {
+    background: #242526;
+    border-color: #3e4042;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  }
+
+  .fbcustom-tag-editor-label {
+    color: #e4e6eb;
+  }
+
+  .fbcustom-tag-editor-row input[type="text"] {
+    background: #3a3b3c;
+    border-color: #4e4f50;
+    color: #e4e6eb;
+  }
+
+  .fbcustom-tag-editor-row input[type="color"] {
+    background: #3a3b3c;
+    border-color: #4e4f50;
+  }
+
+  .fbcustom-tag-editor-actions button.fbcustom-tag-editor-remove {
+    background: #3a3b3c;
+    color: #e4e6eb;
+  }
+
+  .fbcustom-tag-editor-actions button.fbcustom-tag-editor-remove:hover {
+    background: #4e4f50;
+  }
+
+  .fbcustom-tag-btn {
+    border-color: #4599ff;
+    color: #4599ff;
+  }
+
+  .fbcustom-tag-btn:hover {
+    background: rgba(69, 153, 255, 0.16);
+  }
+}
